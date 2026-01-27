@@ -22,9 +22,10 @@ export default function Onboarding() {
 
   const [loading, setLoading] = useState(false);
   const [orgName, setOrgName] = useState("");
-  const [orgCode, setOrgCode] = useState(""); // slug/code users type
+  const [orgCode, setOrgCode] = useState(""); // optional
   const [error, setError] = useState("");
 
+  // keep slug-safe
   const normalizeCode = (value: string) =>
     value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
 
@@ -34,6 +35,26 @@ export default function Onboarding() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
+
+  // Makes sure slug is UNIQUE in DB
+  const makeUniqueSlug = async (base: string) => {
+    const clean = generateSlugFromName(base) || "org";
+    let slug = clean;
+
+    for (let i = 0; i < 20; i++) {
+      const { data } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
+
+      if (!data?.id) return slug;
+
+      slug = `${clean}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+
+    return `${clean}-${Date.now().toString(36)}`;
+  };
 
   const handleCreateOrJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,16 +69,15 @@ export default function Onboarding() {
     }
 
     const name = orgName.trim();
-    const codeInput = normalizeCode(orgCode);
-
-    // If user typed code, use code. Else create code from name.
-    const code = codeInput || generateSlugFromName(name);
-
     if (!name) {
       setError("Organization name is required");
       return;
     }
-    if (!code) {
+
+    const codeInput = normalizeCode(orgCode);
+    const baseSlug = codeInput || generateSlugFromName(name);
+
+    if (!baseSlug) {
       setError("Organization code is required");
       return;
     }
@@ -66,25 +86,30 @@ export default function Onboarding() {
     setError("");
 
     try {
-      // 1) Try to find org by slug (code)
+      // 1) Try find org by slug (code)
       const { data: orgFound, error: findErr } = await supabase
         .from("organizations")
         .select("id, name, slug")
-        .eq("slug", code)
+        .eq("slug", baseSlug)
         .maybeSingle();
 
       if (findErr) throw findErr;
 
       let orgId: string;
       let created = false;
+      let finalSlug = baseSlug;
 
       // 2) If not found → CREATE org
       if (!orgFound?.id) {
+        // IMPORTANT: ensure uniqueness
+        finalSlug = await makeUniqueSlug(baseSlug);
+
         const { data: orgCreated, error: createErr } = await supabase
           .from("organizations")
           .insert({
             name,
-            slug: code, // IMPORTANT: keep it simple so you can share it
+            slug: finalSlug,
+            owner_id: user.id, // remove this line if your table doesn't have owner_id
           })
           .select("id, name, slug")
           .single();
@@ -124,7 +149,7 @@ export default function Onboarding() {
       toast({
         title: created ? "Organization created!" : "Joined organization!",
         description: created
-          ? `Created ${name}. Your Organization Code is "${code}".`
+          ? `Created ${name}. Organization Code: "${finalSlug}". Share it with members.`
           : `Joined ${orgFound?.name ?? name}. Admin will assign your role soon.`,
       });
 
@@ -182,16 +207,16 @@ export default function Onboarding() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="org-code">Organization Code (slug)</Label>
+              <Label htmlFor="org-code">Organization Code (optional)</Label>
               <Input
                 id="org-code"
                 type="text"
-                placeholder="acme (optional)"
+                placeholder="acme"
                 value={orgCode}
                 onChange={(e) => setOrgCode(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Optional. If empty, we auto-generate from the name. Share this code with members.
+                Optional. If empty, we generate from the name. If the slug already exists, it will auto-add a small suffix.
               </p>
             </div>
 
