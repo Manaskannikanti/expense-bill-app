@@ -5,7 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Receipt, Building2, Loader2, ArrowRight } from "lucide-react";
 
@@ -13,7 +19,7 @@ export default function Onboarding() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [loading, setLoading] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [error, setError] = useState("");
@@ -25,82 +31,117 @@ export default function Onboarding() {
       .replace(/(^-|-$)/g, "");
   };
 
-  const handleCreateOrganization = async (e: React.FormEvent) => {
+  const handleCreateOrJoinOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!orgName.trim()) {
+
+    const name = orgName.trim();
+    if (!name) {
       setError("Organization name is required");
       return;
     }
-    
+
     if (!user) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "You must be logged in to create an organization",
+        description: "You must be logged in to continue",
       });
       return;
     }
-    
+
     setLoading(true);
     setError("");
-    
+
     try {
-      const slug = generateSlug(orgName);
-      
-      // Create the organization
-      const { data: org, error: orgError } = await supabase
+      // 1) If org already exists by name -> JOIN it
+      const { data: existingOrg, error: findErr } = await supabase
         .from("organizations")
-        .insert({
-          name: orgName.trim(),
-          slug: slug + "-" + Date.now().toString(36), // Ensure uniqueness
-        })
-        .select()
-        .single();
+        .select("id, name")
+        .eq("name", name)
+        .maybeSingle();
 
-      if (orgError) throw orgError;
+      if (findErr) throw findErr;
 
-      // Add the user as an admin of the organization
-      const { error: memberError } = await supabase
+      let organizationId: string;
+      let createdNewOrg = false;
+
+      if (existingOrg?.id) {
+        organizationId = existingOrg.id;
+      } else {
+        // 2) Else CREATE org (first user becomes admin)
+        const slug = generateSlug(name);
+
+        const { data: org, error: orgError } = await supabase
+          .from("organizations")
+          .insert({
+            name,
+            slug: slug + "-" + Date.now().toString(36), // uniqueness
+          })
+          .select("id, name")
+          .single();
+
+        if (orgError) throw orgError;
+
+        organizationId = org.id;
+        createdNewOrg = true;
+
+        // Create default expense categories ONLY when org is newly created
+        const defaultCategories = [
+          { name: "Team Lunch", icon: "🍽️", color: "#8b5cf6" },
+          { name: "Team Outing", icon: "🎉", color: "#f97316" },
+          { name: "Transportation", icon: "🚗", color: "#06b6d4" },
+          { name: "Supplies", icon: "📦", color: "#10b981" },
+          { name: "Other", icon: "📋", color: "#6b7280" },
+        ];
+
+        await supabase.from("expense_categories").insert(
+          defaultCategories.map((cat) => ({
+            organization_id: organizationId,
+            name: cat.name,
+            icon: cat.icon,
+            color: cat.color,
+          })),
+        );
+      }
+
+      // 3) Prevent duplicates: if user is already a member, do nothing
+      const { data: existingMembership, error: memFindErr } = await supabase
         .from("organization_memberships")
-        .insert({
-          user_id: user.id,
-          organization_id: org.id,
-          role: "admin",
-        });
+        .select("id, role")
+        .eq("organization_id", organizationId)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      if (memberError) throw memberError;
+      if (memFindErr) throw memFindErr;
 
-      // Create default expense categories
-      const defaultCategories = [
-        { name: "Team Lunch", icon: "🍽️", color: "#8b5cf6" },
-        { name: "Team Outing", icon: "🎉", color: "#f97316" },
-        { name: "Transportation", icon: "🚗", color: "#06b6d4" },
-        { name: "Supplies", icon: "📦", color: "#10b981" },
-        { name: "Other", icon: "📋", color: "#6b7280" },
-      ];
+      if (!existingMembership?.id) {
+        const roleToSet = createdNewOrg ? "admin" : "unassigned";
 
-      await supabase.from("expense_categories").insert(
-        defaultCategories.map((cat) => ({
-          organization_id: org.id,
-          name: cat.name,
-          icon: cat.icon,
-          color: cat.color,
-        }))
-      );
+        const { error: memberError } = await supabase
+          .from("organization_memberships")
+          .insert({
+            user_id: user.id,
+            organization_id: organizationId,
+            role: roleToSet,
+          });
+
+        if (memberError) throw memberError;
+      }
 
       toast({
-        title: "Organization created!",
-        description: `Welcome to ${orgName}. You're all set to start managing expenses.`,
+        title: createdNewOrg ? "Organization created!" : "Joined organization!",
+        description: createdNewOrg
+          ? `Welcome to ${name}. You're set to start managing expenses.`
+          : `You're now in ${name}. Your admin will assign your role soon.`,
       });
 
       navigate("/dashboard");
-    } catch (error: any) {
-      console.error("Error creating organization:", error);
+    } catch (err: any) {
+      console.error("Error creating/joining organization:", err);
       toast({
         variant: "destructive",
-        title: "Failed to create organization",
-        description: error.message || "Please try again",
+        title: "Failed",
+        description: err?.message || "Please try again",
       });
     } finally {
       setLoading(false);
@@ -128,14 +169,17 @@ export default function Onboarding() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
             <Building2 className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="font-display text-2xl">Create Your Organization</CardTitle>
+          <CardTitle className="font-display text-2xl">
+            Create or Join Organization
+          </CardTitle>
           <CardDescription>
-            Set up your company to start managing team expenses
+            If the name already exists, you’ll join it (role = unassigned). If not,
+            you’ll create it (you become admin).
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleCreateOrganization} className="space-y-6">
+          <form onSubmit={handleCreateOrJoinOrganization} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="org-name">Organization Name</Label>
               <Input
@@ -148,16 +192,21 @@ export default function Onboarding() {
               />
               {error && <p className="text-sm text-destructive">{error}</p>}
               <p className="text-xs text-muted-foreground">
-                This is the name of your company or team
+                Type the exact org name to join an existing one.
               </p>
             </div>
 
-            <Button type="submit" className="w-full gradient-primary" size="lg" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full gradient-primary"
+              size="lg"
+              disabled={loading}
+            >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  Create Organization
+                  Continue
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </>
               )}
@@ -167,10 +216,7 @@ export default function Onboarding() {
       </Card>
 
       <p className="mt-6 text-sm text-muted-foreground">
-        Already have an organization?{" "}
-        <span className="text-primary">
-          Ask your admin for an invite
-        </span>
+        Joining an org puts you as <b>unassigned</b> until admin sets your role.
       </p>
     </div>
   );
