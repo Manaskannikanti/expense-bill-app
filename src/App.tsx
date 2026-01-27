@@ -28,8 +28,6 @@ const App = () => (
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/admin/members" element={<AdminMembers />} />
           <Route path="/pending" element={<PendingApproval />} />
-
-          {/* keep this LAST */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
