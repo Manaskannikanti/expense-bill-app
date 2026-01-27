@@ -3,19 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Receipt, 
-  LogOut, 
-  Plus, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Receipt,
+  LogOut,
+  Plus,
+  Clock,
+  CheckCircle2,
   DollarSign,
   Building2,
-  Users,
   TrendingUp,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -27,7 +31,7 @@ interface Profile {
 
 interface OrganizationMembership {
   id: string;
-  role: string;
+  role: string | null;
   organization: {
     id: string;
     name: string;
@@ -51,7 +55,8 @@ export default function Dashboard() {
     if (user) {
       fetchUserData();
     }
-  }, [user, authLoading, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, authLoading]);
 
   const fetchUserData = async () => {
     if (!user) return;
@@ -69,29 +74,52 @@ export default function Dashboard() {
       }
 
       // Fetch organization membership
-      const { data: membershipData } = await supabase
+      const { data: membershipData, error: membershipErr } = await supabase
         .from("organization_memberships")
-        .select(`
+        .select(
+          `
           id,
           role,
           organization:organizations(id, name, slug)
-        `)
+        `
+        )
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (membershipData) {
-        // Transform the data to match our interface
-        const transformed = {
-          id: membershipData.id,
-          role: membershipData.role,
-          organization: Array.isArray(membershipData.organization) 
-            ? membershipData.organization[0] 
-            : membershipData.organization
-        };
-        setMembership(transformed as OrganizationMembership);
+      // If query failed, treat as no membership -> onboarding
+      if (membershipErr) {
+        console.error("Membership fetch error:", membershipErr);
+        setMembership(null);
+        return;
       }
+
+      // If no membership row -> onboarding
+      if (!membershipData) {
+        setMembership(null);
+        return;
+      }
+
+      // Transform the data to match our interface
+      const transformed: OrganizationMembership = {
+        id: membershipData.id,
+        role: membershipData.role ?? null,
+        organization: Array.isArray(membershipData.organization)
+          ? membershipData.organization[0]
+          : membershipData.organization,
+      };
+
+      // ✅ ROLE GATING: if unassigned -> pending
+      const role = (transformed.role ?? "unassigned").toLowerCase();
+      if (role === "unassigned") {
+        navigate("/pending");
+        return;
+      }
+
+      setMembership(transformed);
     } catch (error) {
       console.error("Error fetching user data:", error);
+      // On unexpected failure, send them back to onboarding safely
+      setMembership(null);
     } finally {
       setLoading(false);
     }
@@ -139,22 +167,22 @@ export default function Dashboard() {
               Welcome, {profile?.full_name || "there"}!
             </h1>
             <p className="text-lg text-muted-foreground">
-              You're not part of any organization yet. Create one to get started!
+              You're not part of any organization yet. Create or join one to get started!
             </p>
           </div>
 
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Create Your Organization</CardTitle>
+              <CardTitle>Create or Join Organization</CardTitle>
               <CardDescription>
-                Set up your company to start managing team expenses
+                Enter your organization name to create a new one or join an existing one
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button asChild className="w-full gradient-primary" size="lg">
                 <Link to="/onboarding">
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Organization
+                  Continue to Onboarding
                 </Link>
               </Button>
             </CardContent>
@@ -180,7 +208,9 @@ export default function Dashboard() {
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{membership.organization.name}</span>
-              <span className="text-xs text-muted-foreground capitalize">({membership.role})</span>
+              <span className="text-xs text-muted-foreground capitalize">
+                ({membership.role})
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-4">
