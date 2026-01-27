@@ -21,23 +21,22 @@ export default function Onboarding() {
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
-  const [orgCode, setOrgCode] = useState(""); // slug/org code
+  const [orgName, setOrgName] = useState("");
+  const [orgCode, setOrgCode] = useState(""); // slug/code users type
   const [error, setError] = useState("");
 
   const normalizeCode = (value: string) =>
-    value
+    value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+
+  const generateSlugFromName = (name: string) =>
+    name
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9-]/g, ""); // keep slug-safe
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
 
-  const handleJoinOrganization = async (e: React.FormEvent) => {
+  const handleCreateOrJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const code = normalizeCode(orgCode);
-    if (!code) {
-      setError("Organization code is required");
-      return;
-    }
 
     if (!user) {
       toast({
@@ -48,61 +47,93 @@ export default function Onboarding() {
       return;
     }
 
+    const name = orgName.trim();
+    const codeInput = normalizeCode(orgCode);
+
+    // If user typed code, use code. Else create code from name.
+    const code = codeInput || generateSlugFromName(name);
+
+    if (!name) {
+      setError("Organization name is required");
+      return;
+    }
+    if (!code) {
+      setError("Organization code is required");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
-      // 1) Find organization by slug (ORG CODE)
-      const { data: org, error: orgErr } = await supabase
+      // 1) Try to find org by slug (code)
+      const { data: orgFound, error: findErr } = await supabase
         .from("organizations")
         .select("id, name, slug")
         .eq("slug", code)
-        .single();
+        .maybeSingle();
 
-      if (orgErr) {
-        toast({
-          variant: "destructive",
-          title: "Organization not found",
-          description:
-            "Ask your admin for the correct Organization Code (slug).",
-        });
-        return;
+      if (findErr) throw findErr;
+
+      let orgId: string;
+      let created = false;
+
+      // 2) If not found → CREATE org
+      if (!orgFound?.id) {
+        const { data: orgCreated, error: createErr } = await supabase
+          .from("organizations")
+          .insert({
+            name,
+            slug: code, // IMPORTANT: keep it simple so you can share it
+          })
+          .select("id, name, slug")
+          .single();
+
+        if (createErr) throw createErr;
+
+        orgId = orgCreated.id;
+        created = true;
+      } else {
+        orgId = orgFound.id;
       }
 
-      // 2) If already a member, just go dashboard
-      const { data: existingMembership, error: memFindErr } = await supabase
+      // 3) If membership exists, just go dashboard
+      const { data: mem, error: memErr } = await supabase
         .from("organization_memberships")
         .select("id, role")
-        .eq("organization_id", org.id)
+        .eq("organization_id", orgId)
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (memFindErr) throw memFindErr;
+      if (memErr) throw memErr;
 
-      if (!existingMembership?.id) {
-        // 3) Join as UNASSIGNED (admin will assign role later)
+      if (!mem?.id) {
+        const roleToSet = created ? "admin" : "unassigned";
+
         const { error: joinErr } = await supabase
           .from("organization_memberships")
           .insert({
             user_id: user.id,
-            organization_id: org.id,
-            role: "unassigned",
+            organization_id: orgId,
+            role: roleToSet,
           });
 
         if (joinErr) throw joinErr;
       }
 
       toast({
-        title: "Joined organization!",
-        description: `You're now in ${org.name}. Admin will assign your role soon.`,
+        title: created ? "Organization created!" : "Joined organization!",
+        description: created
+          ? `Created ${name}. Your Organization Code is "${code}".`
+          : `Joined ${orgFound?.name ?? name}. Admin will assign your role soon.`,
       });
 
       navigate("/dashboard");
     } catch (err: any) {
-      console.error("Error joining organization:", err);
+      console.error(err);
       toast({
         variant: "destructive",
-        title: "Failed to join organization",
+        title: "Failed",
         description: err?.message || "Please try again",
       });
     } finally {
@@ -112,13 +143,11 @@ export default function Onboarding() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 bg-background">
-      {/* Background decorations */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute top-0 left-1/4 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute bottom-0 right-1/4 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
       </div>
 
-      {/* Logo */}
       <Link to="/" className="flex items-center gap-2 mb-8">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-lg shadow-primary/25">
           <Receipt className="h-6 w-6 text-white" />
@@ -132,31 +161,41 @@ export default function Onboarding() {
             <Building2 className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="font-display text-2xl">
-            Join Your Organization
+            Create or Join Organization
           </CardTitle>
           <CardDescription>
-            Enter the <b>Organization Code</b> shared by your admin (example:
-            amex).
+            If the code exists → you join as <b>unassigned</b>. If not → it creates the org and you become <b>admin</b>.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleJoinOrganization} className="space-y-6">
+          <form onSubmit={handleCreateOrJoin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="org-code">Organization Code</Label>
+              <Label htmlFor="org-name">Organization Name</Label>
+              <Input
+                id="org-name"
+                type="text"
+                placeholder="Acme Inc."
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="org-code">Organization Code (slug)</Label>
               <Input
                 id="org-code"
                 type="text"
-                placeholder="amex"
+                placeholder="acme (optional)"
                 value={orgCode}
                 onChange={(e) => setOrgCode(e.target.value)}
-                className="text-lg"
               />
-              {error && <p className="text-sm text-destructive">{error}</p>}
               <p className="text-xs text-muted-foreground">
-                This is the organization slug. Ask admin if you don’t have it.
+                Optional. If empty, we auto-generate from the name. Share this code with members.
               </p>
             </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
 
             <Button
               type="submit"
@@ -168,7 +207,7 @@ export default function Onboarding() {
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  Join Organization
+                  Continue
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </>
               )}
@@ -178,7 +217,7 @@ export default function Onboarding() {
       </Card>
 
       <p className="mt-6 text-sm text-muted-foreground">
-        After joining, your role will be <b>unassigned</b> until admin assigns it.
+        Members should use the same <b>Organization Code</b> to join.
       </p>
     </div>
   );
