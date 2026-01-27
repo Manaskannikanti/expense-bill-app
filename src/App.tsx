@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 import AdminMembers from "./pages/admin/Members";
+import PendingApproval from "./pages/PendingApproval";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/admin/members" element={<AdminMembers />} />
         <Route path="*" element={<NotFound />} />
+        <Route path="/pending" element={<PendingApproval />} />
       </Routes>
 
     </TooltipProvider>
