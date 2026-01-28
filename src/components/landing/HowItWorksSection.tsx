@@ -33,7 +33,10 @@ const steps = [
 
 export function HowItWorksSection() {
   return (
-    <section className="px-4 py-24 sm:px-6 lg:px-8">
+    <section
+      id="how-it-works"
+      className="scroll-mt-24 px-4 py-24 sm:px-6 lg:px-8"
+    >
       <div className="mx-auto max-w-7xl">
         {/* Section header */}
         <div className="text-center">
@@ -55,20 +58,24 @@ export function HowItWorksSection() {
                   <ArrowRight className="absolute -right-2 -top-2 h-4 w-4 text-muted-foreground" />
                 </div>
               )}
-              
+
               <div className="flex flex-col items-center text-center">
                 {/* Step number badge */}
                 <div className="mb-4 text-sm font-bold text-muted-foreground">
                   STEP {step.number}
                 </div>
-                
+
                 {/* Icon */}
-                <div className={`flex h-16 w-16 items-center justify-center rounded-2xl ${step.color} shadow-lg`}>
+                <div
+                  className={`flex h-16 w-16 items-center justify-center rounded-2xl ${step.color} shadow-lg`}
+                >
                   <step.icon className="h-8 w-8" />
                 </div>
-                
+
                 {/* Content */}
-                <h3 className="mt-6 font-display text-xl font-semibold">{step.title}</h3>
+                <h3 className="mt-6 font-display text-xl font-semibold">
+                  {step.title}
+                </h3>
                 <p className="mt-2 text-muted-foreground">{step.description}</p>
               </div>
             </div>
