@@ -13,8 +13,7 @@ export function Navbar() {
       const el = document.getElementById(id);
       if (!el) return;
 
-      // account for fixed navbar height
-      const navOffset = 90;
+      const navOffset = 90; // height of fixed navbar
       const y = el.getBoundingClientRect().top + window.scrollY - navOffset;
 
       window.scrollTo({ top: y, behavior: "smooth" });
@@ -23,8 +22,7 @@ export function Navbar() {
     // If not on homepage, go home first then scroll
     if (location.pathname !== "/") {
       navigate("/");
-      // wait for DOM to render Index sections
-      setTimeout(doScroll, 200);
+      setTimeout(doScroll, 300); // wait for DOM render
     } else {
       doScroll();
     }
@@ -46,33 +44,29 @@ export function Navbar() {
         {/* Desktop navigation */}
         <div className="hidden items-center gap-8 md:flex">
           <button
-            type="button"
             onClick={() => scrollToId("features")}
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             Features
           </button>
 
           <button
-            type="button"
             onClick={() => scrollToId("how-it-works")}
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             How it works
           </button>
 
           <button
-            type="button"
             onClick={() => scrollToId("pricing")}
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             Pricing
           </button>
 
           <button
-            type="button"
             onClick={() => scrollToId("about")}
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             About
           </button>
@@ -88,7 +82,7 @@ export function Navbar() {
           </Button>
         </div>
 
-        {/* Mobile menu button */}
+        {/* Mobile menu toggle */}
         <Button
           variant="ghost"
           size="icon"
@@ -103,35 +97,16 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="border-t bg-background px-4 py-6 md:hidden">
           <div className="flex flex-col gap-4">
-            <button
-              type="button"
-              className="text-left text-sm font-medium text-muted-foreground"
-              onClick={() => scrollToId("features")}
-            >
+            <button onClick={() => scrollToId("features")} className="text-left text-sm">
               Features
             </button>
-
-            <button
-              type="button"
-              className="text-left text-sm font-medium text-muted-foreground"
-              onClick={() => scrollToId("how-it-works")}
-            >
+            <button onClick={() => scrollToId("how-it-works")} className="text-left text-sm">
               How it works
             </button>
-
-            <button
-              type="button"
-              className="text-left text-sm font-medium text-muted-foreground"
-              onClick={() => scrollToId("pricing")}
-            >
+            <button onClick={() => scrollToId("pricing")} className="text-left text-sm">
               Pricing
             </button>
-
-            <button
-              type="button"
-              className="text-left text-sm font-medium text-muted-foreground"
-              onClick={() => scrollToId("about")}
-            >
+            <button onClick={() => scrollToId("about")} className="text-left text-sm">
               About
             </button>
 
