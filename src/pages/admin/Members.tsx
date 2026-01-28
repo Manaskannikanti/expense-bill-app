@@ -27,7 +27,6 @@ type MemberRow = {
   user_id: string;
   role: Role | null;
   profiles?: {
-    id?: string;
     full_name: string | null;
     email: string | null;
   } | null;
@@ -72,7 +71,8 @@ export default function Members() {
       if (memErr) throw memErr;
 
       const organization_id = myMembership.organization_id as string;
-      const role = ((myMembership.role ?? "unassigned") as string).toLowerCase() as Role;
+      const role = ((myMembership.role ?? "unassigned") as string)
+        .toLowerCase() as Role;
 
       setOrgId(organization_id);
       setMyRole(role);
@@ -88,26 +88,51 @@ export default function Members() {
         return;
       }
 
-      // 2) Load org members + profile info
-      // ✅ IMPORTANT: specify the FK relationship name explicitly
+      // 2) Load org members (NO JOIN)
       const { data: rows, error: listErr } = await supabase
         .from("organization_memberships")
-        .select(`
-          id,
-          user_id,
-          role,
-          profiles:profiles!organization_memberships_user_id_fkey (
-            id,
-            full_name,
-            email
-          )
-        `)
+        .select("id, user_id, role")
         .eq("organization_id", organization_id)
         .order("created_at", { ascending: true });
 
       if (listErr) throw listErr;
 
-      setMembers((rows as any) ?? []);
+      const memberRows = ((rows ?? []) as any[]).map((r) => ({
+        id: r.id,
+        user_id: r.user_id,
+        role: (r.role ?? "unassigned") as Role,
+      })) as MemberRow[];
+
+      // 3) Load profiles separately and merge
+      const userIds = memberRows.map((m) => m.user_id);
+
+      let profileMap = new Map<
+        string,
+        { full_name: string | null; email: string | null }
+      >();
+
+      if (userIds.length > 0) {
+        const { data: profs, error: profErr } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", userIds);
+
+        if (profErr) throw profErr;
+
+        (profs ?? []).forEach((p: any) => {
+          profileMap.set(p.id, {
+            full_name: p.full_name ?? null,
+            email: p.email ?? null,
+          });
+        });
+      }
+
+      const merged = memberRows.map((m) => ({
+        ...m,
+        profiles: profileMap.get(m.user_id) ?? null,
+      }));
+
+      setMembers(merged);
     } catch (e: any) {
       console.error(e);
       toast({
@@ -189,13 +214,16 @@ export default function Members() {
           <CardHeader>
             <CardTitle>Members</CardTitle>
             <CardDescription>
-              New users join as <b>unassigned</b>. Admin sets them to employee/hr/accounts.
+              New users join as <b>unassigned</b>. Admin sets them to
+              employee/hr/accounts.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
             {members.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No members found.</div>
+              <div className="text-sm text-muted-foreground">
+                No members found.
+              </div>
             ) : (
               members.map((m) => {
                 const role = ((m.role ?? "unassigned") as string).toLowerCase() as Role;
