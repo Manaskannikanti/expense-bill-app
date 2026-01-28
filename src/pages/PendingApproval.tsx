@@ -3,26 +3,36 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Loader2, Hourglass } from "lucide-react";
 
 type Role = "admin" | "employee" | "hr" | "accounts" | "unassigned";
 
 export default function PendingApproval() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
+    if (loggingOut) return;
     if (!authLoading && !user) navigate("/auth");
-  }, [authLoading, user, navigate]);
+  }, [authLoading, user, navigate, loggingOut]);
 
   useEffect(() => {
+    if (loggingOut) return;
     if (!user) return;
 
     const checkRole = async () => {
       setLoading(true);
+
       const { data, error } = await supabase
         .from("organization_memberships")
         .select("role")
@@ -47,7 +57,18 @@ export default function PendingApproval() {
     };
 
     checkRole();
-  }, [user, navigate]);
+  }, [user, navigate, loggingOut]);
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await supabase.auth.signOut(); // ✅ real logout
+      window.location.href = "/auth"; // ✅ hard redirect (no loops)
+    } catch (e) {
+      console.error("Logout failed:", e);
+      setLoggingOut(false);
+    }
+  };
 
   if (authLoading || loading) {
     return (
@@ -66,27 +87,19 @@ export default function PendingApproval() {
           </div>
           <CardTitle className="text-2xl">Waiting for Admin Approval</CardTitle>
           <CardDescription>
-            Your account is created, but your role is not assigned yet.
-            Please contact your organization admin.
+            Your account is created, but your role is not assigned yet. Please
+            contact your organization admin.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex gap-3 justify-center">
-         <Button
-  variant="outline"
-  onClick={async () => {
-    await signOut();     // ✅ ACTUAL logout
-    navigate("/");      // or "/auth"
-  }}
->
-  Logout
-</Button>
 
-          <Button onClick={() => window.location.reload()}>
-            Refresh
+        <CardContent className="flex gap-3 justify-center">
+          <Button variant="outline" onClick={handleLogout} disabled={loggingOut}>
+            {loggingOut ? "Logging out..." : "Logout"}
           </Button>
+
+          <Button onClick={() => window.location.reload()}>Refresh</Button>
         </CardContent>
       </Card>
     </div>
   );
 }
-
