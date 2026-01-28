@@ -41,7 +41,10 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="bg-muted/50 px-4 py-24 sm:px-6 lg:px-8">
+    <section
+      id="features"
+      className="scroll-mt-24 bg-muted/50 px-4 py-24 sm:px-6 lg:px-8"
+    >
       <div className="mx-auto max-w-7xl">
         {/* Section header */}
         <div className="text-center">
@@ -62,11 +65,17 @@ export function FeaturesSection() {
               className="group rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
-              <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${feature.color} transition-transform group-hover:scale-110`}>
+              <div
+                className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${feature.color} transition-transform group-hover:scale-110`}
+              >
                 <feature.icon className="h-6 w-6" />
               </div>
-              <h3 className="mt-4 font-display text-xl font-semibold">{feature.title}</h3>
-              <p className="mt-2 text-muted-foreground">{feature.description}</p>
+              <h3 className="mt-4 font-display text-xl font-semibold">
+                {feature.title}
+              </h3>
+              <p className="mt-2 text-muted-foreground">
+                {feature.description}
+              </p>
             </div>
           ))}
         </div>
