@@ -42,9 +42,11 @@ const features = [
 export function FeaturesSection() {
   return (
     <section
-      id="features"
-      className="scroll-mt-24 bg-muted/50 px-4 py-24 sm:px-6 lg:px-8"
-    >
+   <section
+  id="features"
+  className="scroll-mt-24 bg-muted/50 px-4 py-24 sm:px-6 lg:px-8"
+>
+
       <div className="mx-auto max-w-7xl">
         {/* Section header */}
         <div className="text-center">
