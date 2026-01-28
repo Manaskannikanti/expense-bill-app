@@ -14,6 +14,7 @@ import PendingApproval from "./pages/PendingApproval";
 import SubmitExpense from "./pages/SubmitExpense";
 import Admin from "./pages/admin/Admin";
 import Members from "./pages/admin/Members";
+import HrApprovals from "./pages/hr/Approvals";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ const App = () => (
         <Route path="/expenses/new" element={<SubmitExpense />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/members" element={<Members />} />
+        <Route path="/hr/approvals" element={<HrApprovals />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </TooltipProvider>
