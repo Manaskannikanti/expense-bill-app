@@ -96,14 +96,15 @@ export default function SubmitExpense() {
       const status: ExpenseStatus = "pending";
 
       // ✅ IMPORTANT: must include user_id for your RLS policy
-      const { error } = await supabase.from("expenses").insert({
-        organization_id: orgId,
-        user_id: user.id,
-        title: cleanTitle,
-        amount: cleanAmount,
-        status,
-        receipt_url: null, // now allowed after SQL fix
-      });
+   const { error } = await supabase.from("expenses").insert({
+  organization_id: orgId,
+  user_id: user!.id,        // needed for RLS
+  created_by: user!.id,     // needed because column is NOT NULL
+  title: cleanTitle,
+  amount: cleanAmount,
+  status,
+  receipt_url: null,        // only if DB allows null
+});
 
       if (error) throw error;
 
