@@ -41,7 +41,6 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section
    <section
   id="features"
   className="scroll-mt-24 bg-muted/50 px-4 py-24 sm:px-6 lg:px-8"
