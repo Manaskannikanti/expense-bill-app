@@ -33,10 +33,7 @@ const steps = [
 
 export function HowItWorksSection() {
   return (
-    <section
-      id="how-it-works"
-      className="px-4 py-24 sm:px-6 lg:px-8 scroll-mt-24"
-    >
+    <section id="how-it-works" className="px-4 py-24 sm:px-6 lg:px-8 scroll-mt-24">
       <div className="mx-auto max-w-7xl">
         {/* Section header */}
         <div className="text-center">
@@ -52,24 +49,34 @@ export function HowItWorksSection() {
         <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {steps.map((step, index) => (
             <div key={step.number} className="relative">
-              {/* Connector line */}
+              {/* ✅ Connector line (behind icons, no overlap) */}
               {index < steps.length - 1 && (
-                <div className="absolute left-1/2 top-16 hidden h-px w-full bg-border lg:block">
-                  <ArrowRight className="absolute -right-2 -top-2 h-4 w-4 text-muted-foreground" />
-                </div>
+                <div className="absolute left-1/2 top-20 hidden h-px w-full bg-border lg:block z-0" />
               )}
 
               <div className="flex flex-col items-center text-center">
+                {/* Step number badge */}
                 <div className="mb-4 text-sm font-bold text-muted-foreground">
                   STEP {step.number}
                 </div>
 
-                <div className={`flex h-16 w-16 items-center justify-center rounded-2xl ${step.color} shadow-lg`}>
+                {/* ✅ Icon (stays above the line) */}
+                <div
+                  className={`relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl ${step.color} shadow-lg`}
+                >
                   <step.icon className="h-8 w-8" />
                 </div>
 
+                {/* Content */}
                 <h3 className="mt-6 font-display text-xl font-semibold">{step.title}</h3>
                 <p className="mt-2 text-muted-foreground">{step.description}</p>
+
+                {/* Optional arrow icon (only on large screens) */}
+                {index < steps.length - 1 && (
+                  <div className="hidden lg:flex items-center justify-center mt-6 text-muted-foreground">
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                )}
               </div>
             </div>
           ))}
