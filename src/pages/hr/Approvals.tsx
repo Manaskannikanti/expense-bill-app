@@ -1,28 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Receipt, ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Receipt, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
 
 type Role = "admin" | "employee" | "hr" | "accounts" | "unassigned";
+type ExpenseStatus = "pending" | "approved" | "rejected";
 
 type ExpenseRow = {
   id: string;
   title: string;
   amount: number;
-  status: string;
+  status: ExpenseStatus;
   created_at: string;
   user_id: string;
-  receipt_url: string | null;
-  profiles?: {
-    full_name: string | null;
-    email: string | null;
-  } | null;
 };
 
 export default function HrApprovals() {
@@ -32,10 +34,9 @@ export default function HrApprovals() {
 
   const [loading, setLoading] = useState(true);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [myRole, setMyRole] = useState<Role>("unassigned");
-
-  const [pending, setPending] = useState<ExpenseRow[]>([]);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [role, setRole] = useState<Role>("unassigned");
+  const [items, setItems] = useState<ExpenseRow[]>([]);
+  const [actingId, setActingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -50,7 +51,7 @@ export default function HrApprovals() {
   const bootstrap = async () => {
     setLoading(true);
     try {
-      // 1) my membership
+      // 1) membership + role
       const { data: mem, error: memErr } = await supabase
         .from("organization_memberships")
         .select("organization_id, role")
@@ -59,22 +60,35 @@ export default function HrApprovals() {
 
       if (memErr) throw memErr;
 
-      const role = (mem.role ?? "unassigned") as Role;
-      setMyRole(role);
+      const myRole = (mem.role ?? "unassigned") as Role;
+      setRole(myRole);
       setOrgId(mem.organization_id);
 
-      if (role !== "hr") {
+      if (myRole === "unassigned") {
+        navigate("/pending");
+        return;
+      }
+      if (myRole !== "hr" && myRole !== "admin") {
         toast({
           variant: "destructive",
           title: "Not authorized",
-          description: "Only HR can access approvals.",
+          description: "Only HR (or Admin) can approve expenses.",
         });
         navigate("/dashboard");
         return;
       }
 
-      // 2) load pending expenses
-      await loadPending(mem.organization_id);
+      // 2) load pending expenses for org
+      const { data: rows, error: listErr } = await supabase
+        .from("expenses")
+        .select("id, title, amount, status, created_at, user_id")
+        .eq("organization_id", mem.organization_id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (listErr) throw listErr;
+
+      setItems((rows as any) ?? []);
     } catch (e: any) {
       console.error(e);
       toast({
@@ -88,57 +102,33 @@ export default function HrApprovals() {
     }
   };
 
-  const loadPending = async (organization_id: string) => {
-    const { data, error } = await supabase
-      .from("expenses")
-      .select("id, title, amount, status, created_at, user_id, receipt_url, profiles:profiles(full_name, email)")
-      .eq("organization_id", organization_id)
-      .in("status", ["pending", "pending_manager", "pending_hr", "pending_approval"]) // supports your earlier statuses
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    setPending((data as any) ?? []);
-  };
-
-  const fmtMoney = useMemo(
-    () => (n: number) =>
-      new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(n || 0),
-    []
-  );
-
-  const approve = async (expenseId: string) => {
+  const decide = async (expenseId: string, nextStatus: ExpenseStatus) => {
     if (!orgId) return;
-    setUpdatingId(expenseId);
+    setActingId(expenseId);
     try {
-      // choose ONE status name and keep it consistent.
-      const { error } = await supabase.from("expenses").update({ status: "approved" }).eq("id", expenseId);
+      const { error } = await supabase
+        .from("expenses")
+        .update({ status: nextStatus })
+        .eq("id", expenseId)
+        .eq("organization_id", orgId);
+
       if (error) throw error;
 
-      setPending((prev) => prev.filter((x) => x.id !== expenseId));
-      toast({ title: "Approved", description: "Expense approved successfully." });
+      setItems((prev) => prev.filter((x) => x.id !== expenseId));
+
+      toast({
+        title: nextStatus === "approved" ? "Approved" : "Rejected",
+        description: `Expense has been ${nextStatus}.`,
+      });
     } catch (e: any) {
       console.error(e);
-      toast({ variant: "destructive", title: "Approve failed", description: e?.message ?? "Try again" });
+      toast({
+        variant: "destructive",
+        title: "Action failed",
+        description: e?.message ?? "Please try again",
+      });
     } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const reject = async (expenseId: string) => {
-    if (!orgId) return;
-    setUpdatingId(expenseId);
-    try {
-      const { error } = await supabase.from("expenses").update({ status: "rejected" }).eq("id", expenseId);
-      if (error) throw error;
-
-      setPending((prev) => prev.filter((x) => x.id !== expenseId));
-      toast({ title: "Rejected", description: "Expense rejected." });
-    } catch (e: any) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Reject failed", description: e?.message ?? "Try again" });
-    } finally {
-      setUpdatingId(null);
+      setActingId(null);
     }
   };
 
@@ -168,98 +158,73 @@ export default function HrApprovals() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold">HR Approvals</h1>
-          <p className="text-sm text-muted-foreground">
-            Review employee expenses and approve or reject.
-          </p>
+      <main className="mx-auto max-w-4xl px-4 py-8">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="font-display text-2xl font-bold">HR Approvals</h1>
+            <p className="text-sm text-muted-foreground">
+              Review pending expenses (role: <span className="capitalize">{role}</span>)
+            </p>
+          </div>
+
+          <Badge variant="secondary">{items.length} pending</Badge>
         </div>
 
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Pending Expenses</CardTitle>
-            <CardDescription>
-              Showing expenses with status: pending / pending_manager / pending_hr / pending_approval
-            </CardDescription>
-          </CardHeader>
+        {items.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>No pending expenses</CardTitle>
+              <CardDescription>You're all caught up.</CardDescription>
+            </CardHeader>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {items.map((x) => (
+              <Card key={x.id} className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">{x.title}</CardTitle>
+                  <CardDescription>
+                    Amount: <b>${x.amount.toFixed(2)}</b> • Submitted{" "}
+                    {new Date(x.created_at).toLocaleString()}
+                  </CardDescription>
+                </CardHeader>
 
-          <CardContent className="space-y-4">
-            {pending.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No pending expenses 🎉</div>
-            ) : (
-              pending.map((x) => (
-                <div
-                  key={x.id}
-                  className="p-4 rounded-xl border bg-card flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <div className="font-medium">{x.title}</div>
-                      <Badge variant="secondary" className="capitalize">
-                        {x.status}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {fmtMoney(x.amount)} •{" "}
-                      {x.profiles?.full_name ?? x.profiles?.email ?? x.user_id}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Submitted: {new Date(x.created_at).toLocaleString()}
-                    </div>
-
-                    {x.receipt_url ? (
-                      <a
-                        href={x.receipt_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-primary underline"
-                      >
-                        View receipt
-                      </a>
+                <CardContent className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+                  <Button
+                    variant="destructive"
+                    onClick={() => decide(x.id, "rejected")}
+                    disabled={actingId === x.id}
+                  >
+                    {actingId === x.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <div className="text-xs text-muted-foreground">No receipt uploaded</div>
+                      <>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Reject
+                      </>
                     )}
-                  </div>
+                  </Button>
 
-                  <div className="flex items-center gap-3">
-                    <Button
-                      className="gradient-primary"
-                      onClick={() => approve(x.id)}
-                      disabled={updatingId === x.id}
-                    >
-                      {updatingId === x.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-4 w-4 mr-2" />
-                          Approve
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      variant="destructive"
-                      onClick={() => reject(x.id)}
-                      disabled={updatingId === x.id}
-                    >
-                      {updatingId === x.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <XCircle className="h-4 w-4 mr-2" />
-                          Reject
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                  <Button
+                    className="gradient-primary"
+                    onClick={() => decide(x.id, "approved")}
+                    disabled={actingId === x.id}
+                  >
+                    {actingId === x.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Approve
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );
 }
-
