@@ -225,17 +225,17 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8">
-        {/* Quick Actions */}
-        <Button
-        className="gradient-primary shadow-lg shadow-primary/25"
-  size="lg"
-  onClick={() => navigate("/expenses/new")}
->
-  <Plus className="h-4 w-4 mr-2" />
-  Submit New Expense
-</Button>
-
-        </div>
+  {/* Quick Actions */}
+  <div className="mb-8">
+    <Button
+      className="gradient-primary shadow-lg shadow-primary/25"
+      size="lg"
+      onClick={() => navigate("/expenses/new")}
+    >
+      <Plus className="h-4 w-4 mr-2" />
+      Submit New Expense
+    </Button>
+  </div>
 
         {/* Stats Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
