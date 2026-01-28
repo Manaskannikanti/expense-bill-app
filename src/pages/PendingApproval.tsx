@@ -9,7 +9,7 @@ import { Loader2, Hourglass } from "lucide-react";
 type Role = "admin" | "employee" | "hr" | "accounts" | "unassigned";
 
 export default function PendingApproval() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
