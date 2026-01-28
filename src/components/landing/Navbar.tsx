@@ -1,10 +1,36 @@
 import { Button } from "@/components/ui/button";
 import { Menu, Receipt, X } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const scrollToId = (id: string) => {
+    const doScroll = () => {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      // account for fixed navbar height
+      const navOffset = 90;
+      const y = el.getBoundingClientRect().top + window.scrollY - navOffset;
+
+      window.scrollTo({ top: y, behavior: "smooth" });
+    };
+
+    // If not on homepage, go home first then scroll
+    if (location.pathname !== "/") {
+      navigate("/");
+      // wait for DOM to render Index sections
+      setTimeout(doScroll, 200);
+    } else {
+      doScroll();
+    }
+
+    setMobileMenuOpen(false);
+  };
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b bg-background/80 backdrop-blur-lg">
@@ -19,15 +45,37 @@ export function Navbar() {
 
         {/* Desktop navigation */}
         <div className="hidden items-center gap-8 md:flex">
-          <Link to="#features" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <button
+            type="button"
+            onClick={() => scrollToId("features")}
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
             Features
-          </Link>
-          <Link to="#" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollToId("how-it-works")}
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            How it works
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollToId("pricing")}
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
             Pricing
-          </Link>
-          <Link to="#" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+          </button>
+
+          <button
+            type="button"
+            onClick={() => scrollToId("about")}
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
             About
-          </Link>
+          </button>
         </div>
 
         {/* Auth buttons */}
@@ -55,33 +103,46 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="border-t bg-background px-4 py-6 md:hidden">
           <div className="flex flex-col gap-4">
-            <Link
-              to="#features"
-              className="text-sm font-medium text-muted-foreground"
-              onClick={() => setMobileMenuOpen(false)}
+            <button
+              type="button"
+              className="text-left text-sm font-medium text-muted-foreground"
+              onClick={() => scrollToId("features")}
             >
               Features
-            </Link>
-            <Link
-              to="#"
-              className="text-sm font-medium text-muted-foreground"
-              onClick={() => setMobileMenuOpen(false)}
+            </button>
+
+            <button
+              type="button"
+              className="text-left text-sm font-medium text-muted-foreground"
+              onClick={() => scrollToId("how-it-works")}
+            >
+              How it works
+            </button>
+
+            <button
+              type="button"
+              className="text-left text-sm font-medium text-muted-foreground"
+              onClick={() => scrollToId("pricing")}
             >
               Pricing
-            </Link>
-            <Link
-              to="#"
-              className="text-sm font-medium text-muted-foreground"
-              onClick={() => setMobileMenuOpen(false)}
+            </button>
+
+            <button
+              type="button"
+              className="text-left text-sm font-medium text-muted-foreground"
+              onClick={() => scrollToId("about")}
             >
               About
-            </Link>
+            </button>
+
             <hr className="my-2" />
+
             <Button asChild variant="outline" className="w-full">
               <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
                 Sign In
               </Link>
             </Button>
+
             <Button asChild className="w-full gradient-primary">
               <Link to="/auth?mode=signup" onClick={() => setMobileMenuOpen(false)}>
                 Get Started
