@@ -22,7 +22,7 @@ const Index = () => {
 
         <section id="how-it-works">
           <HowItWorksSection />
-s
+          
         </section>
 
         <section id="about">
