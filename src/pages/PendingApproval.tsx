@@ -71,9 +71,16 @@ export default function PendingApproval() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-3 justify-center">
-          <Button variant="outline" onClick={() => navigate("/auth")}>
-            Logout
-          </Button>
+         <Button
+  variant="outline"
+  onClick={async () => {
+    await signOut();     // ✅ ACTUAL logout
+    navigate("/");      // or "/auth"
+  }}
+>
+  Logout
+</Button>
+
           <Button onClick={() => window.location.reload()}>
             Refresh
           </Button>
