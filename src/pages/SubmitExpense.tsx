@@ -32,12 +32,10 @@ export default function SubmitExpense() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState<string>("");
 
-  // redirect if not logged in
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
   }, [authLoading, user, navigate]);
 
-  // load membership
   useEffect(() => {
     if (!user) return;
     void bootstrap();
@@ -51,20 +49,14 @@ export default function SubmitExpense() {
         .from("organization_memberships")
         .select("organization_id, role")
         .eq("user_id", user!.id)
-        .maybeSingle();
+        .single();
 
       if (error) throw error;
 
-      if (!membership) {
-        // no org membership -> onboarding
-        navigate("/onboarding");
-        return;
-      }
-
       setOrgId(membership.organization_id);
-      setMyRole(membership.role ?? "");
+      setMyRole(membership.role);
 
-      // if your app uses "unassigned" flow
+      // If you keep "unassigned" flow:
       if ((membership.role ?? "").toLowerCase() === "unassigned") {
         navigate("/pending");
         return;
@@ -85,25 +77,7 @@ export default function SubmitExpense() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Not logged in",
-        description: "Please login again.",
-      });
-      navigate("/auth");
-      return;
-    }
-
-    if (!orgId) {
-      toast({
-        variant: "destructive",
-        title: "No organization found",
-        description: "Please join/create an organization first.",
-      });
-      navigate("/onboarding");
-      return;
-    }
+    if (!orgId || !user) return;
 
     const cleanTitle = title.trim();
     const cleanAmount = Number(amount);
@@ -121,21 +95,21 @@ export default function SubmitExpense() {
     try {
       const status: ExpenseStatus = "pending";
 
-      // ✅ IMPORTANT: RLS is checking user_id, so we MUST insert user_id
+      // ✅ IMPORTANT: must include user_id for your RLS policy
       const { error } = await supabase.from("expenses").insert({
         organization_id: orgId,
-        user_id: user.id,          // ✅ required for your RLS
-        created_by: user.id,       // ✅ optional (keep it if your table has it)
+        user_id: user.id,
         title: cleanTitle,
         amount: cleanAmount,
         status,
+        receipt_url: null, // now allowed after SQL fix
       });
 
       if (error) throw error;
 
       toast({
         title: "Expense submitted",
-        description: "Your expense is now waiting for approval.",
+        description: "Your expense is now pending.",
       });
 
       navigate("/dashboard");
@@ -182,7 +156,7 @@ export default function SubmitExpense() {
           <CardHeader>
             <CardTitle>Submit New Expense</CardTitle>
             <CardDescription>
-              Role: <b className="capitalize">{myRole || "member"}</b>
+              Role: <b className="capitalize">{myRole}</b>
             </CardDescription>
           </CardHeader>
 
@@ -214,7 +188,6 @@ export default function SubmitExpense() {
                 className="w-full gradient-primary"
                 size="lg"
                 disabled={saving}
-                type="submit"
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
