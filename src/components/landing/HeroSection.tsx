@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 
 export function HeroSection() {
   return (
-    <section className="relative overflow-hidden px-4 pt-20 pb-32 sm:px-6 lg:px-8">
+    <section id = "hero" className="relative overflow-hidden px-4 pt-20 pb-32 sm:px-6 lg:px-8">
       {/* Background decorations */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-0 left-1/4 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
