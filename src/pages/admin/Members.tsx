@@ -26,7 +26,7 @@ type MemberRow = {
   id: string;
   user_id: string;
   role: Role | null;
-  profiles?: {
+  profile?: {
     full_name: string | null;
     email: string | null;
   } | null;
@@ -60,8 +60,9 @@ export default function Members() {
 
   const bootstrap = async () => {
     setLoading(true);
+
     try {
-      // 1) Get my membership (org + role)
+      // 1) My membership (org + role)
       const { data: myMembership, error: memErr } = await supabase
         .from("organization_memberships")
         .select("organization_id, role")
@@ -71,13 +72,11 @@ export default function Members() {
       if (memErr) throw memErr;
 
       const organization_id = myMembership.organization_id as string;
-      const role = ((myMembership.role ?? "unassigned") as string)
-        .toLowerCase() as Role;
+      const role = ((myMembership.role ?? "unassigned") as string).toLowerCase() as Role;
 
       setOrgId(organization_id);
       setMyRole(role);
 
-      // Guard: only admin can access
       if (role !== "admin") {
         toast({
           variant: "destructive",
@@ -88,8 +87,8 @@ export default function Members() {
         return;
       }
 
-      // 2) Load org members (NO JOIN)
-      const { data: rows, error: listErr } = await supabase
+      // 2) Load memberships (NO JOIN)
+      const { data: membershipRows, error: listErr } = await supabase
         .from("organization_memberships")
         .select("id, user_id, role")
         .eq("organization_id", organization_id)
@@ -97,39 +96,32 @@ export default function Members() {
 
       if (listErr) throw listErr;
 
-      const memberRows = ((rows ?? []) as any[]).map((r) => ({
-        id: r.id,
-        user_id: r.user_id,
-        role: (r.role ?? "unassigned") as Role,
-      })) as MemberRow[];
+      const rows = (membershipRows ?? []) as any[];
 
-      // 3) Load profiles separately and merge
-      const userIds = memberRows.map((m) => m.user_id);
+      // 3) Load profiles separately
+      const userIds = Array.from(new Set(rows.map((r) => r.user_id))).filter(Boolean);
 
-      let profileMap = new Map<
-        string,
-        { full_name: string | null; email: string | null }
-      >();
+      let profilesById: Record<string, { full_name: string | null; email: string | null }> = {};
 
       if (userIds.length > 0) {
-        const { data: profs, error: profErr } = await supabase
+        const { data: profiles, error: profErr } = await supabase
           .from("profiles")
           .select("id, full_name, email")
           .in("id", userIds);
 
-        if (profErr) throw profErr;
-
-        (profs ?? []).forEach((p: any) => {
-          profileMap.set(p.id, {
-            full_name: p.full_name ?? null,
-            email: p.email ?? null,
-          });
-        });
+        // If profiles table RLS blocks this, we still show user_id (no crash)
+        if (!profErr && profiles) {
+          profilesById = Object.fromEntries(
+            profiles.map((p) => [p.id, { full_name: p.full_name, email: p.email }])
+          );
+        }
       }
 
-      const merged = memberRows.map((m) => ({
-        ...m,
-        profiles: profileMap.get(m.user_id) ?? null,
+      const merged: MemberRow[] = rows.map((m) => ({
+        id: m.id,
+        user_id: m.user_id,
+        role: m.role,
+        profile: profilesById[m.user_id] ?? null,
       }));
 
       setMembers(merged);
@@ -214,16 +206,13 @@ export default function Members() {
           <CardHeader>
             <CardTitle>Members</CardTitle>
             <CardDescription>
-              New users join as <b>unassigned</b>. Admin sets them to
-              employee/hr/accounts.
+              New users join as <b>unassigned</b>. Admin sets them to employee/hr/accounts.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
             {members.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                No members found.
-              </div>
+              <div className="text-sm text-muted-foreground">No members found.</div>
             ) : (
               members.map((m) => {
                 const role = ((m.role ?? "unassigned") as string).toLowerCase() as Role;
@@ -235,10 +224,10 @@ export default function Members() {
                   >
                     <div>
                       <div className="font-medium">
-                        {m.profiles?.full_name ?? "User"}
+                        {m.profile?.full_name ?? "User"}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {m.profiles?.email ?? m.user_id}
+                        {m.profile?.email ?? m.user_id}
                       </div>
                     </div>
 
