@@ -1,30 +1,37 @@
 import { Button } from "@/components/ui/button";
 import { Menu, Receipt, X } from "lucide-react";
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
-  const scrollToId = (id: string) => {
-    const doScroll = () => {
+  const scrollToSection = (id: string) => {
+    const scroll = () => {
       const el = document.getElementById(id);
-      if (!el) return;
+      if (!el) return false;
 
-      const navOffset = 90; // height of fixed navbar
-      const y = el.getBoundingClientRect().top + window.scrollY - navOffset;
+      const yOffset = 90; // navbar height
+      const y =
+        el.getBoundingClientRect().top + window.scrollY - yOffset;
 
       window.scrollTo({ top: y, behavior: "smooth" });
+      return true;
     };
 
-    // If not on homepage, go home first then scroll
     if (location.pathname !== "/") {
       navigate("/");
-      setTimeout(doScroll, 300); // wait for DOM render
+
+      // wait until DOM mounts (IMPORTANT)
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (scroll() || attempts > 20) clearInterval(interval);
+      }, 50);
     } else {
-      doScroll();
+      scroll();
     }
 
     setMobileMenuOpen(false);
@@ -32,98 +39,60 @@ export function Navbar() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b bg-background/80 backdrop-blur-lg">
-      <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-lg shadow-primary/25">
+        <button
+          onClick={() => scrollToSection("hero")}
+          className="flex items-center gap-2"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary">
             <Receipt className="h-5 w-5 text-white" />
           </div>
           <span className="font-display text-xl font-bold">ExpenseFlow</span>
-        </Link>
+        </button>
 
-        {/* Desktop navigation */}
-        <div className="hidden items-center gap-8 md:flex">
-          <button
-            onClick={() => scrollToId("features")}
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Features
-          </button>
-
-          <button
-            onClick={() => scrollToId("how-it-works")}
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
+        {/* Desktop nav */}
+        <div className="hidden md:flex gap-8">
+          <button onClick={() => scrollToSection("features")}>Features</button>
+          <button onClick={() => scrollToSection("how-it-works")}>
             How it works
           </button>
-
-          <button
-            onClick={() => scrollToId("pricing")}
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Pricing
-          </button>
-
-          <button
-            onClick={() => scrollToId("about")}
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            About
-          </button>
+          <button onClick={() => scrollToSection("pricing")}>Pricing</button>
+          <button onClick={() => scrollToSection("about")}>About</button>
         </div>
 
-        {/* Auth buttons */}
-        <div className="hidden items-center gap-3 md:flex">
-          <Button asChild variant="ghost">
-            <Link to="/auth">Sign In</Link>
+        {/* Auth */}
+        <div className="hidden md:flex gap-3">
+          <Button variant="ghost" onClick={() => navigate("/auth")}>
+            Sign In
           </Button>
-          <Button asChild className="gradient-primary shadow-lg shadow-primary/25">
-            <Link to="/auth?mode=signup">Get Started</Link>
+          <Button
+            className="gradient-primary"
+            onClick={() => navigate("/auth?mode=signup")}
+          >
+            Get Started
           </Button>
         </div>
 
-        {/* Mobile menu toggle */}
+        {/* Mobile menu */}
         <Button
           variant="ghost"
           size="icon"
           className="md:hidden"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {mobileMenuOpen ? <X /> : <Menu />}
         </Button>
       </nav>
 
-      {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="border-t bg-background px-4 py-6 md:hidden">
-          <div className="flex flex-col gap-4">
-            <button onClick={() => scrollToId("features")} className="text-left text-sm">
-              Features
-            </button>
-            <button onClick={() => scrollToId("how-it-works")} className="text-left text-sm">
-              How it works
-            </button>
-            <button onClick={() => scrollToId("pricing")} className="text-left text-sm">
-              Pricing
-            </button>
-            <button onClick={() => scrollToId("about")} className="text-left text-sm">
-              About
-            </button>
-
-            <hr className="my-2" />
-
-            <Button asChild variant="outline" className="w-full">
-              <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
-                Sign In
-              </Link>
-            </Button>
-
-            <Button asChild className="w-full gradient-primary">
-              <Link to="/auth?mode=signup" onClick={() => setMobileMenuOpen(false)}>
-                Get Started
-              </Link>
-            </Button>
-          </div>
+        <div className="md:hidden bg-background border-t px-4 py-6 space-y-4">
+          <button onClick={() => scrollToSection("features")}>Features</button>
+          <button onClick={() => scrollToSection("how-it-works")}>
+            How it works
+          </button>
+          <button onClick={() => scrollToSection("pricing")}>Pricing</button>
+          <button onClick={() => scrollToSection("about")}>About</button>
         </div>
       )}
     </header>
