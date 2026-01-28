@@ -108,17 +108,28 @@ export default function Dashboard() {
           : membershipData.organization,
       };
 
-      // ✅ ROLE GATING: if unassigned -> pending
       const role = (transformed.role ?? "unassigned").toLowerCase();
+
+      // ✅ ROLE ROUTING
       if (role === "unassigned") {
         navigate("/pending");
         return;
       }
 
+      if (role === "hr") {
+        navigate("/hr/approvals");
+        return;
+      }
+
+      if (role === "accounts") {
+        navigate("/accounts/export");
+        return;
+      }
+
+      // admin + employee stay here (dashboard UI)
       setMembership(transformed);
     } catch (error) {
       console.error("Error fetching user data:", error);
-      // On unexpected failure, send them back to onboarding safely
       setMembership(null);
     } finally {
       setLoading(false);
@@ -192,7 +203,7 @@ export default function Dashboard() {
     );
   }
 
-  // Has organization - show dashboard
+  // Has organization - show dashboard (admin/employee)
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -225,17 +236,17 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8">
-  {/* Quick Actions */}
-  <div className="mb-8">
-    <Button
-      className="gradient-primary shadow-lg shadow-primary/25"
-      size="lg"
-      onClick={() => navigate("/expenses/new")}
-    >
-      <Plus className="h-4 w-4 mr-2" />
-      Submit New Expense
-    </Button>
-  </div>
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <Button
+            className="gradient-primary shadow-lg shadow-primary/25"
+            size="lg"
+            onClick={() => navigate("/expenses/new")}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Submit New Expense
+          </Button>
+        </div>
 
         {/* Stats Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -307,7 +318,7 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground mb-4">
                 Submit your first expense to get started
               </p>
-              <Button className="gradient-primary">
+              <Button className="gradient-primary" onClick={() => navigate("/expenses/new")}>
                 <Plus className="h-4 w-4 mr-2" />
                 Submit Expense
               </Button>
