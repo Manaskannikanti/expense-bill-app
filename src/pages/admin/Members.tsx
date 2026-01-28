@@ -3,8 +3,20 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, Receipt, ArrowLeft, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,6 +27,7 @@ type MemberRow = {
   user_id: string;
   role: Role | null;
   profiles?: {
+    id?: string;
     full_name: string | null;
     email: string | null;
   } | null;
@@ -75,10 +88,20 @@ export default function Members() {
         return;
       }
 
-      // 2) Load org members + profile info (requires profiles table)
+      // 2) Load org members + profile info
+      // ✅ IMPORTANT: specify the FK relationship name explicitly
       const { data: rows, error: listErr } = await supabase
         .from("organization_memberships")
-        .select("id, user_id, role, profiles:profiles(full_name, email)")
+        .select(`
+          id,
+          user_id,
+          role,
+          profiles:profiles!organization_memberships_user_id_fkey (
+            id,
+            full_name,
+            email
+          )
+        `)
         .eq("organization_id", organization_id)
         .order("created_at", { ascending: true });
 
@@ -183,7 +206,9 @@ export default function Members() {
                     className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-xl border bg-card"
                   >
                     <div>
-                      <div className="font-medium">{m.profiles?.full_name ?? "User"}</div>
+                      <div className="font-medium">
+                        {m.profiles?.full_name ?? "User"}
+                      </div>
                       <div className="text-sm text-muted-foreground">
                         {m.profiles?.email ?? m.user_id}
                       </div>
