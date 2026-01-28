@@ -226,11 +226,15 @@ export default function Dashboard() {
 
       <main className="mx-auto max-w-7xl px-4 py-8">
         {/* Quick Actions */}
-        <div className="mb-8">
-          <Button className="gradient-primary shadow-lg shadow-primary/25" size="lg">
-            <Plus className="h-4 w-4 mr-2" />
-            Submit New Expense
-          </Button>
+        <Button
+        className="gradient-primary shadow-lg shadow-primary/25"
+  size="lg"
+  onClick={() => navigate("/expenses/new")}
+>
+  <Plus className="h-4 w-4 mr-2" />
+  Submit New Expense
+</Button>
+
         </div>
 
         {/* Stats Cards */}
