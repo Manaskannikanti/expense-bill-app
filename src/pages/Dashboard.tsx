@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import {
   Receipt,
   LogOut,
@@ -20,11 +22,10 @@ import {
   Building2,
   TrendingUp,
   Loader2,
-  Users,
   Shield,
-  Download,
+  Users,
+  FileDown,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 type Role = "admin" | "employee" | "hr" | "accounts" | "unassigned";
 
@@ -47,6 +48,7 @@ interface OrganizationMembership {
 export default function Dashboard() {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [membership, setMembership] = useState<OrganizationMembership | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,18 +58,16 @@ export default function Dashboard() {
       navigate("/auth");
       return;
     }
-
-    if (user) {
-      fetchUserData();
-    }
+    if (user) void fetchUserData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading]);
 
   const fetchUserData = async () => {
     if (!user) return;
 
+    setLoading(true);
     try {
-      // 1) Profile
+      // Profile
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
@@ -76,15 +76,15 @@ export default function Dashboard() {
 
       if (profileData) setProfile(profileData);
 
-      // 2) Membership
+      // Membership + org
       const { data: membershipData, error: membershipErr } = await supabase
         .from("organization_memberships")
         .select(
           `
-            id,
-            role,
-            organization:organizations(id, name, slug)
-          `
+          id,
+          role,
+          organization:organizations(id, name, slug)
+        `
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -108,14 +108,15 @@ export default function Dashboard() {
           : membershipData.organization,
       };
 
-      // ✅ Only unassigned goes to /pending
-      const role = (transformed.role ?? "unassigned").toLowerCase();
+      const role = ((transformed.role ?? "unassigned") as string).toLowerCase() as Role;
+
+      // ✅ If unassigned -> pending screen
       if (role === "unassigned") {
         navigate("/pending");
         return;
       }
 
-      setMembership(transformed);
+      setMembership({ ...transformed, role });
     } catch (error) {
       console.error("Error fetching user data:", error);
       setMembership(null);
@@ -129,6 +130,10 @@ export default function Dashboard() {
     navigate("/");
   };
 
+  const role = useMemo(() => {
+    return ((membership?.role ?? "unassigned") as string).toLowerCase() as Role;
+  }, [membership?.role]);
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -137,7 +142,7 @@ export default function Dashboard() {
     );
   }
 
-  // No organization - show onboarding
+  // No org -> onboarding
   if (!membership) {
     return (
       <div className="min-h-screen bg-background">
@@ -173,7 +178,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle>Create or Join Organization</CardTitle>
               <CardDescription>
-                Continue to onboarding and enter the org code.
+                Enter your organization name to create a new one or join an existing one
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -190,7 +195,12 @@ export default function Dashboard() {
     );
   }
 
-  const role = (membership.role ?? "employee").toLowerCase() as Role;
+  // ✅ Role dashboards (same page)
+  const roleTitle =
+    role === "admin" ? "Admin Dashboard" :
+    role === "hr" ? "HR Dashboard" :
+    role === "accounts" ? "Accounts Dashboard" :
+    "Employee Dashboard";
 
   return (
     <div className="min-h-screen bg-background">
@@ -207,7 +217,9 @@ export default function Dashboard() {
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{membership.organization.name}</span>
-              <span className="text-xs text-muted-foreground capitalize">({role})</span>
+              <span className="text-xs text-muted-foreground capitalize">
+                ({role})
+              </span>
             </div>
           </div>
 
@@ -222,121 +234,127 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8">
-        {/* Quick Actions */}
-        <div className="mb-8 flex flex-wrap gap-3">
-          {(role === "admin" || role === "employee") && (
-            <Button
-              className="gradient-primary shadow-lg shadow-primary/25"
-              size="lg"
-              onClick={() => navigate("/expenses/new")}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Submit New Expense
-            </Button>
+      <main className="mx-auto max-w-7xl px-4 py-8 space-y-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold">{roleTitle}</h1>
+          <p className="text-sm text-muted-foreground">
+            Choose what you want to do based on your role.
+          </p>
+        </div>
+
+        {/* ✅ Quick Actions per role */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {(role === "employee" || role === "admin") && (
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" /> Submit Expense
+                </CardTitle>
+                <CardDescription>Upload a new bill for approval.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full gradient-primary" onClick={() => navigate("/expenses/new")}>
+                  Submit New Expense
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           {role === "admin" && (
-            <Button variant="outline" size="lg" onClick={() => navigate("/admin/members")}>
-              <Users className="h-4 w-4 mr-2" />
-              Manage Members
-            </Button>
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-4 w-4" /> Manage Members
+                </CardTitle>
+                <CardDescription>Approve users and assign roles.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full" onClick={() => navigate("/admin/members")}>
+                  Open Members Panel
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           {role === "hr" && (
-            <Button variant="outline" size="lg" onClick={() => navigate("/hr/approvals")}>
-              <Shield className="h-4 w-4 mr-2" />
-              HR Approvals
-            </Button>
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" /> HR Approvals
+                </CardTitle>
+                <CardDescription>Approve or reject employee bills.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full gradient-primary" onClick={() => navigate("/hr/approvals")}>
+                  Review Pending Expenses
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           {role === "accounts" && (
-            <Button variant="outline" size="lg" onClick={() => navigate("/accounts/export")}>
-              <Download className="h-4 w-4 mr-2" />
-              Export Approved
-            </Button>
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileDown className="h-4 w-4" /> Accounts Export
+                </CardTitle>
+                <CardDescription>Download approved receipts for processing.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button className="w-full gradient-primary" onClick={() => navigate("/accounts/export")}>
+                  Download Approved Bills
+                </Button>
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        {/* Stats Cards (placeholder) */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        {/* Basic stats placeholder (we’ll wire real counts later) */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Pending Approval
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
               <Clock className="h-4 w-4 text-warning" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">$0.00</div>
-              <p className="text-xs text-muted-foreground">0 expenses</p>
+              <p className="text-xs text-muted-foreground">wire real count next</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Approved This Month
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Approved</CardTitle>
               <CheckCircle2 className="h-4 w-4 text-success" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">$0.00</div>
-              <p className="text-xs text-muted-foreground">0 expenses</p>
+              <p className="text-xs text-muted-foreground">wire real count next</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Reimbursed
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Reimbursed</CardTitle>
               <DollarSign className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">$0.00</div>
-              <p className="text-xs text-muted-foreground">This month</p>
+              <p className="text-xs text-muted-foreground">wire real count next</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Spending
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
               <TrendingUp className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">$0.00</div>
-              <p className="text-xs text-muted-foreground">All time</p>
+              <p className="text-xs text-muted-foreground">wire real count next</p>
             </CardContent>
           </Card>
         </div>
-
-        {/* Recent Expenses (placeholder) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Expenses</CardTitle>
-            <CardDescription>Your latest expense submissions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                <Receipt className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="font-semibold mb-2">No expenses yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Submit your first expense to get started
-              </p>
-              {(role === "admin" || role === "employee") && (
-                <Button className="gradient-primary" onClick={() => navigate("/expenses/new")}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Submit Expense
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </main>
     </div>
   );
