@@ -7,16 +7,16 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Loader2, ArrowLeft, Receipt } from "lucide-react";
 
-type ExpenseStatus =
-  | "draft"
-  | "pending_manager"
-  | "pending_finance"
-  | "approved"
-  | "rejected"
-  | "reimbursed";
+type ExpenseStatus = "pending" | "approved" | "rejected" | "reimbursed";
 
 export default function SubmitExpense() {
   const { user, loading: authLoading } = useAuth();
@@ -32,10 +32,12 @@ export default function SubmitExpense() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState<string>("");
 
+  // redirect if not logged in
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
   }, [authLoading, user, navigate]);
 
+  // load membership
   useEffect(() => {
     if (!user) return;
     void bootstrap();
@@ -49,15 +51,21 @@ export default function SubmitExpense() {
         .from("organization_memberships")
         .select("organization_id, role")
         .eq("user_id", user!.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
-      setOrgId(membership.organization_id);
-      setMyRole(membership.role);
+      if (!membership) {
+        // no org membership -> onboarding
+        navigate("/onboarding");
+        return;
+      }
 
-      // If your app uses "unassigned" flow, keep this:
-      if (membership.role === "unassigned") {
+      setOrgId(membership.organization_id);
+      setMyRole(membership.role ?? "");
+
+      // if your app uses "unassigned" flow
+      if ((membership.role ?? "").toLowerCase() === "unassigned") {
         navigate("/pending");
         return;
       }
@@ -77,7 +85,25 @@ export default function SubmitExpense() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!orgId) return;
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Not logged in",
+        description: "Please login again.",
+      });
+      navigate("/auth");
+      return;
+    }
+
+    if (!orgId) {
+      toast({
+        variant: "destructive",
+        title: "No organization found",
+        description: "Please join/create an organization first.",
+      });
+      navigate("/onboarding");
+      return;
+    }
 
     const cleanTitle = title.trim();
     const cleanAmount = Number(amount);
@@ -93,11 +119,13 @@ export default function SubmitExpense() {
 
     setSaving(true);
     try {
-      const status: ExpenseStatus = "pending_manager";
+      const status: ExpenseStatus = "pending";
 
+      // ✅ IMPORTANT: RLS is checking user_id, so we MUST insert user_id
       const { error } = await supabase.from("expenses").insert({
         organization_id: orgId,
-        created_by: user!.id,
+        user_id: user.id,          // ✅ required for your RLS
+        created_by: user.id,       // ✅ optional (keep it if your table has it)
         title: cleanTitle,
         amount: cleanAmount,
         status,
@@ -154,7 +182,7 @@ export default function SubmitExpense() {
           <CardHeader>
             <CardTitle>Submit New Expense</CardTitle>
             <CardDescription>
-              Role: <b className="capitalize">{myRole}</b>
+              Role: <b className="capitalize">{myRole || "member"}</b>
             </CardDescription>
           </CardHeader>
 
@@ -182,8 +210,17 @@ export default function SubmitExpense() {
                 />
               </div>
 
-              <Button className="w-full gradient-primary" size="lg" disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Expense"}
+              <Button
+                className="w-full gradient-primary"
+                size="lg"
+                disabled={saving}
+                type="submit"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Submit Expense"
+                )}
               </Button>
             </form>
           </CardContent>
@@ -192,4 +229,3 @@ export default function SubmitExpense() {
     </div>
   );
 }
-
