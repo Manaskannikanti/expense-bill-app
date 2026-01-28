@@ -20,8 +20,13 @@ import {
   Building2,
   TrendingUp,
   Loader2,
+  Users,
+  Shield,
+  Download,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+
+type Role = "admin" | "employee" | "hr" | "accounts" | "unassigned";
 
 interface Profile {
   id: string;
@@ -31,7 +36,7 @@ interface Profile {
 
 interface OrganizationMembership {
   id: string;
-  role: string | null;
+  role: Role | null;
   organization: {
     id: string;
     name: string;
@@ -62,71 +67,54 @@ export default function Dashboard() {
     if (!user) return;
 
     try {
-      // Fetch profile
+      // 1) Profile
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single();
 
-      if (profileData) {
-        setProfile(profileData);
-      }
+      if (profileData) setProfile(profileData);
 
-      // Fetch organization membership
+      // 2) Membership
       const { data: membershipData, error: membershipErr } = await supabase
         .from("organization_memberships")
         .select(
           `
-          id,
-          role,
-          organization:organizations(id, name, slug)
-        `
+            id,
+            role,
+            organization:organizations(id, name, slug)
+          `
         )
         .eq("user_id", user.id)
         .maybeSingle();
 
-      // If query failed, treat as no membership -> onboarding
       if (membershipErr) {
         console.error("Membership fetch error:", membershipErr);
         setMembership(null);
         return;
       }
 
-      // If no membership row -> onboarding
       if (!membershipData) {
         setMembership(null);
         return;
       }
 
-      // Transform the data to match our interface
       const transformed: OrganizationMembership = {
         id: membershipData.id,
-        role: membershipData.role ?? null,
+        role: (membershipData.role ?? "unassigned") as Role,
         organization: Array.isArray(membershipData.organization)
           ? membershipData.organization[0]
           : membershipData.organization,
       };
 
+      // ✅ Only unassigned goes to /pending
       const role = (transformed.role ?? "unassigned").toLowerCase();
-
-      // ✅ ROLE ROUTING
       if (role === "unassigned") {
         navigate("/pending");
         return;
       }
 
-      if (role === "hr") {
-        navigate("/hr/approvals");
-        return;
-      }
-
-      if (role === "accounts") {
-        navigate("/accounts/export");
-        return;
-      }
-
-      // admin + employee stay here (dashboard UI)
       setMembership(transformed);
     } catch (error) {
       console.error("Error fetching user data:", error);
@@ -153,7 +141,6 @@ export default function Dashboard() {
   if (!membership) {
     return (
       <div className="min-h-screen bg-background">
-        {/* Header */}
         <header className="border-b bg-card">
           <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2">
@@ -186,7 +173,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle>Create or Join Organization</CardTitle>
               <CardDescription>
-                Enter your organization name to create a new one or join an existing one
+                Continue to onboarding and enter the org code.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -203,10 +190,10 @@ export default function Dashboard() {
     );
   }
 
-  // Has organization - show dashboard (admin/employee)
+  const role = (membership.role ?? "employee").toLowerCase() as Role;
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card">
         <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -216,14 +203,14 @@ export default function Dashboard() {
               </div>
               <span className="font-display text-xl font-bold">ExpenseFlow</span>
             </Link>
+
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{membership.organization.name}</span>
-              <span className="text-xs text-muted-foreground capitalize">
-                ({membership.role})
-              </span>
+              <span className="text-xs text-muted-foreground capitalize">({role})</span>
             </div>
           </div>
+
           <div className="flex items-center gap-4">
             <span className="hidden sm:block text-sm text-muted-foreground">
               {profile?.full_name || profile?.email}
@@ -237,18 +224,41 @@ export default function Dashboard() {
 
       <main className="mx-auto max-w-7xl px-4 py-8">
         {/* Quick Actions */}
-        <div className="mb-8">
-          <Button
-            className="gradient-primary shadow-lg shadow-primary/25"
-            size="lg"
-            onClick={() => navigate("/expenses/new")}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Submit New Expense
-          </Button>
+        <div className="mb-8 flex flex-wrap gap-3">
+          {(role === "admin" || role === "employee") && (
+            <Button
+              className="gradient-primary shadow-lg shadow-primary/25"
+              size="lg"
+              onClick={() => navigate("/expenses/new")}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Submit New Expense
+            </Button>
+          )}
+
+          {role === "admin" && (
+            <Button variant="outline" size="lg" onClick={() => navigate("/admin/members")}>
+              <Users className="h-4 w-4 mr-2" />
+              Manage Members
+            </Button>
+          )}
+
+          {role === "hr" && (
+            <Button variant="outline" size="lg" onClick={() => navigate("/hr/approvals")}>
+              <Shield className="h-4 w-4 mr-2" />
+              HR Approvals
+            </Button>
+          )}
+
+          {role === "accounts" && (
+            <Button variant="outline" size="lg" onClick={() => navigate("/accounts/export")}>
+              <Download className="h-4 w-4 mr-2" />
+              Export Approved
+            </Button>
+          )}
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards (placeholder) */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -303,7 +313,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Recent Expenses */}
+        {/* Recent Expenses (placeholder) */}
         <Card>
           <CardHeader>
             <CardTitle>Recent Expenses</CardTitle>
@@ -318,10 +328,12 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground mb-4">
                 Submit your first expense to get started
               </p>
-              <Button className="gradient-primary" onClick={() => navigate("/expenses/new")}>
-                <Plus className="h-4 w-4 mr-2" />
-                Submit Expense
-              </Button>
+              {(role === "admin" || role === "employee") && (
+                <Button className="gradient-primary" onClick={() => navigate("/expenses/new")}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Submit Expense
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
